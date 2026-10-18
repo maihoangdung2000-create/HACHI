@@ -1,0 +1,49 @@
+
+name: HACHI Documentation Check
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "*.md"
+      - ".github/workflows/docs-check.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "*.md"
+      - ".github/workflows/docs-check.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check-docs:
+    name: Check project documentation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check required documentation
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for file in README.md PROJECT_MEMORY.md TASKS.md; do
+            if [ ! -f "$file" ]; then
+              echo "::error::Missing required file: $file"
+              exit 1
+            fi
+
+            if [ ! -s "$file" ]; then
+              echo "::error::File is empty: $file"
+              exit 1
+            fi
+
+            echo "PASS: $file exists and is not empty"
+          done
+
+          echo "Documentation checks completed."
+          

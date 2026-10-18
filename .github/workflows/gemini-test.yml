@@ -1,0 +1,68 @@
+
+name: HACHI Gemini API Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gemini-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+      - name: Send test request to Gemini
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "${GEMINI_API_KEY:-}" ]; then
+            echo "::error::GEMINI_API_KEY secret is missing"
+            exit 1
+          fi
+
+          payload="$(jq -n '{
+            contents: [{
+              parts: [{
+                text: "You are the AI reviewer for project HACHI. Reply in Vietnamese with one short sentence confirming that the API test works. Do not propose code changes."
+              }]
+            }],
+            generationConfig: {
+              temperature: 0,
+              maxOutputTokens: 100
+            }
+          }')"
+
+          response="$(curl --silent --show-error \
+            --max-time 45 \
+            --request POST \
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent" \
+            --header "Content-Type: application/json" \
+            --header "x-goog-api-key: ${GEMINI_API_KEY}" \
+            --data "$payload" \
+            --write-out '\n%{http_code}')"
+
+          http_code="$(printf '%s\n' "$response" | tail -n 1)"
+          body="$(printf '%s\n' "$response" | sed '$d')"
+
+          if [ "$http_code" != "200" ]; then
+            echo "::error::Gemini API request failed with HTTP $http_code"
+            printf '%s\n' "$body" | jq -c '{error: .error.message}'
+            exit 1
+          fi
+
+          answer="$(printf '%s' "$body" | jq -r \
+            '.candidates[0].content.parts[0].text // empty')"
+
+          if [ -z "$answer" ]; then
+            echo "::error::Gemini returned no text"
+            exit 1
+          fi
+
+          echo "Gemini API test succeeded."
+          printf 'Gemini response: %s\n' "$answer"
+          
